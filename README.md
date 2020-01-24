@@ -1,8 +1,52 @@
-## Advanced Lane Finding
-[![Udacity - Self-Driving Car NanoDegree](https://s3.amazonaws.com/udacity-sdc/github/shield-carnd.svg)](http://www.udacity.com/drive)
+## Udacity SDC (Self-Driving Car): Advanced Lane Finding
+
+### Introduction ###
+
+In this project, the objetive is to create a pipeline, using advanced computer vision techniques, to find lane lines in the road a video. The result expected should be like the following image:
+
 ![Lanes Image](./examples/example_output.jpg)
 
-In this project, your goal is to write a software pipeline to identify the lane boundaries in a video, but the main output or product we want you to create is a detailed writeup of the project.  Check out the [writeup template](https://github.com/udacity/CarND-Advanced-Lane-Lines/blob/master/writeup_template.md) for this project and use it as a starting point for creating your own writeup.  
+To get the above results, we need to take present the following criteria:
+
+- Calibrate the camera: to compute the camera matrix and distrtion coefficients.
+- Distortion Correction Image: usign the parameters obtained on Calibration Camera.
+- Identify Color Transforms: To obtain the lane pixels from images.
+- Make a Perspective Transform: Rectify each image to a "bird eye view".
+- Identify left and right lane lines and fit with a curved functional form.
+- Calculate the radious of curvature.
+- Apply line finding on video: based on result from images, implement the final pipeline in the video.
+
+## Developing the pipeline ###
+Before starting the algorithm to identify the line lanes on the images or video, we need to consider that the elements captured from camera needs a correction due a distortion caused by the camera lens.
+
+### Camera Calibration ###
+The objective of this step is to compute the camera matrix using the following functions from opencv:
+
+``` python3
+## Find corners,  with nx = 9, ny = 6
+cv2.findChessboardCorners(img, (nx, ny), None)
+
+## ... calculate and save objpoints and imgpoints
+
+## calibrate camera, with (width, heigth) = img.shape[:2]
+cv2.calibrateCamera(objpoints, imgpoints, (width, height), None, None)
+
+## undisort image
+cv2.undistort(img, mtx, dist, None, mtx)
+```
+
+using the following image for calibration:
+![](camera_cal/calibration3.jpg)
+
+After calculate ```objpoints
+
+The pipeline is developed starting from the following image:
+
+
+
+
+
+the  the following image,
 
 Creating a great writeup:
 ---
