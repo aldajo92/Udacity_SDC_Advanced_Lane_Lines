@@ -17,7 +17,7 @@ To get the above results, we need to take present the following criteria:
 - Apply line finding on video: based on result from images, implement the final pipeline in the video.
 
 ## Developing the pipeline ###
-Before starting the algorithm to identify the line lanes on the images or video, we need to consider that the elements captured from camera needs a correction due a distortion caused by the camera lens.
+Before starting the algorithm to identify the line lanes on the images or video, we need to consider that the elements captured from camera needs a correction due a distortion caused by the camera lens. This require the camera calibration
 
 ### Camera Calibration ###
 The objective of this step is to compute the camera matrix using the following functions from opencv:
@@ -34,8 +34,9 @@ cv2.calibrateCamera(objpoints, imgpoints, (width, height), None, None)
 ## undisort image
 cv2.undistort(img, mtx, dist, None, mtx)
 ```
+In the [pipeline](Pipeline.ipynb), we use all the images stored in [camera_cal](./camera_cal)
 
-using the following image for calibration:
+Using the following image for calibration:
 ![](camera_cal/calibration3.jpg)
 
 After calculate ```objpoints
