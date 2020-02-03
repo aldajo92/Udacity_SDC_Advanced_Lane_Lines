@@ -20,64 +20,105 @@ To get the above results, we need to take present the following criteria:
 Before starting the algorithm to identify the line lanes on the images or video, we need to consider that the elements captured from camera needs a correction due a distortion caused by the camera lens. This require the camera calibration
 
 ### Camera Calibration ###
-The objective of this step is to compute the camera matrix using the following functions from opencv:
+The objective of this step is to prepare the variables required to get the camera matrix using the following functions from opencv (check [pipeline](Pipeline.ipynb)):
 
 ``` python3
-## Find corners,  with nx = 9, ny = 6
-cv2.findChessboardCorners(img, (nx, ny), None)
+## nx = 9, ny = 6
+objp = np.zeros((nx*ny,3), np.float32)
+objp[:,:2] = np.mgrid[0:nx, 0:ny].T.reshape(-1,2)
 
-## ... calculate and save objpoints and imgpoints
+## ... calculate and save objpoints and imgpoints, using glob
+objpoints = [] # 3d points in real world space
+imgpoints = [] # 2d points in image plane.
 
-## calibrate camera, with (width, heigth) = img.shape[:2]
-cv2.calibrateCamera(objpoints, imgpoints, (width, height), None, None)
+images = glob.glob('camera_cal/calibration*.jpg')
+n_it = len(images)
 
-## undisort image
-cv2.undistort(img, mtx, dist, None, mtx)
+for i in range(n_it):
+    img = cv2.imread(images[i])
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    
+    # Find the chessboard corners
+    ret, corners = cv2.findChessboardCorners(gray, (nx,ny), None)
+    
+    if ret == True:
+        # append objp and corners
+        objpoints.append(objp)
+        imgpoints.append(corners)
 ```
-In the [pipeline](Pipeline.ipynb), we use all the images stored in [camera_cal](./camera_cal)
 
-Using the following image for calibration:
+The last script, is a lite version of the original one, that will be used to get the camera matrix using the following method from opencv:
+
+```python3
+ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, img.shape[0:2], None, None)
+```
+
+## Distortion Correction Image ##
+
+In the [pipeline](Pipeline.ipynb), we use all the images stored in [camera_cal](./camera_cal) to get all ```object_points``` and ```image_points```, after obtain this information we use the following method to unidistor image, based on the camera matrix:
+
+```python
+def cal_undistort(img, objpoints, imgpoints):
+    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, img.shape[0:2], None, None)
+    
+    dst = cv2.undistort(img, mtx, dist, None, mtx)
+    return dst, mtx, dist
+```
+
+The following image is used to do the distortion correction:
 ![](camera_cal/calibration3.jpg)
 
-After calculate ```objpoints
+We obtain the following result:
+![](./results/01_undisorted.jpg)
 
-The pipeline is developed starting from the following image:
+## Identify Color Transforms ##
+Lets print all the rgb channels for a image taken in the lane lines context.
+
+The following image will be used to identify the color transforms:
+![](curved-lane.jpg)
+
+The RGB channels printed as gray scale looks like this:
+
+- Red channel:
+![](results/03_lane_lines_red.jpg)
+
+- Green channel:
+![](results/03_lane_lines_green.jpg)
+
+- Blue channel:
+![](results/03_lane_lines_blue.jpg)
+
+Lets move to another color space.
+
+In the HLS space, each channel printed as gray scale looks like this:
+- H channel:
+![](results/03_lane_lines_h_hls.jpg)
+
+- L channel:
+![](results/03_lane_lines_l_hls.jpg)
+
+- S channel:
+![](results/03_lane_lines_s_hls.jpg)
+
+In the HSV space, each channel printed as gray scale looks like this:
+- H channel:
+![](results/03_lane_lines_h_hsv.jpg)
+
+- S channel:
+![](results/03_lane_lines_s_hsv.jpg)
+
+- V channel:
+![](results/03_lane_lines_v_hsv.jpg)
+
+Based in the results, the S channel from HLS should be a good option, because it have a high contrast with the lines and background.
+
+Applying sobel operation in x direction to the selected channel, have the following result:
+
+## Identify Color Transforms ##
 
 
 
 
-
-the  the following image,
-
-Creating a great writeup:
----
-A great writeup should include the rubric points as well as your description of how you addressed each point.  You should include a detailed description of the code used in each step (with line-number references and code snippets where necessary), and links to other supporting documents or external references.  You should include images in your writeup to demonstrate how your code works with examples.  
-
-All that said, please be concise!  We're not looking for you to write a book here, just a brief description of how you passed each rubric point, and references to the relevant code :). 
-
-You're not required to use markdown for your writeup.  If you use another method please just submit a pdf of your writeup.
-
-The Project
----
-
-The goals / steps of this project are the following:
-
-* Compute the camera calibration matrix and distortion coefficients given a set of chessboard images.
-* Apply a distortion correction to raw images.
-* Use color transforms, gradients, etc., to create a thresholded binary image.
-* Apply a perspective transform to rectify binary image ("birds-eye view").
-* Detect lane pixels and fit to find the lane boundary.
-* Determine the curvature of the lane and vehicle position with respect to center.
-* Warp the detected lane boundaries back onto the original image.
-* Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
-
-The images for camera calibration are stored in the folder called `camera_cal`.  The images in `test_images` are for testing your pipeline on single frames.  If you want to extract more test images from the videos, you can simply use an image writing method like `cv2.imwrite()`, i.e., you can read the video in frame by frame as usual, and for frames you want to save for later you can write to an image file.  
-
-To help the reviewer examine your work, please save examples of the output from each stage of your pipeline in the folder called `output_images`, and include a description in your writeup for the project of what each image shows.    The video called `project_video.mp4` is the video your pipeline should work well on.  
-
-The `challenge_video.mp4` video is an extra (and optional) challenge for you if you want to test your pipeline under somewhat trickier conditions.  The `harder_challenge.mp4` video is another optional challenge and is brutal!
-
-If you're feeling ambitious (again, totally optional though), don't stop there!  We encourage you to go out and take video of your own, calibrate your camera and show us how you would implement this project from scratch!
 
 ## How to write a README
 A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
