@@ -112,12 +112,94 @@ In the HSV space, each channel printed as gray scale looks like this:
 
 Based in the results, the S channel from HLS should be a good option, because it have a high contrast with the lines and background.
 
-Applying sobel operation in x direction to the selected channel, have the following result:
+Applying sobel operation in x direction to the selected channel with the following method:
+```
+def sobel_x(img):
+    sobel = cv2.Sobel(gray, cv2.CV_64F, 1, 0)
+    abs_sobel = np.absolute(sobel)
+    scaled_sobel = np.uint8(255*abs_sobel/np.max(abs_sobel))
+    return scaled_sobel
+```
+The result is:
+![](results/04_sobel_x.jpg)
 
-## Identify Color Transforms ##
+```
+thresh_min = 20
+thresh_max = 150
+sxbinary = np.zeros_like(scaled_sobel)
+sxbinary[(scaled_sobel >= thresh_min) & (scaled_sobel <= thresh_max)] = 1
+plt.imshow(sxbinary, cmap='gray')
+plt.imsave('results/04_sobel_binary_x.jpg', sxbinary, cmap='gray')
+```
 
+the last method is modified, to return a binary image:
+```
+def sobel_x_binary(img, thresh_min, thresh_max):
+    sobel = cv2.Sobel(gray, cv2.CV_64F, 1, 0)
+    abs_sobel = np.absolute(sobel)
+    scaled_sobel = np.uint8(255*abs_sobel/np.max(abs_sobel))
 
+    sxbinary = np.zeros_like(scaled_sobel)
+    sxbinary[(scaled_sobel >= thresh_min) & (scaled_sobel <= thresh_max)] = 1
+    return sxbinary
+```
 
+The result obtained is:
+
+![](results/04_sobel_binary_x.jpg)
+
+## Make a Perspective Transform ##
+To make a perspective transform, the points are selected based on the region of interest made in the previous project, so we use the following function and its implementation as a reference:
+
+```
+def region_of_interest(img, vertices):
+    mask = np.zeros_like(img)   
+    
+    if len(img.shape) > 2:
+        channel_count = img.shape[2]  # i.e. 3 or 4 depending on your image
+        ignore_mask_color = (255,) * channel_count
+    else:
+        ignore_mask_color = 255
+    cv2.fillPoly(mask, vertices, ignore_mask_color)
+
+    masked_image = cv2.bitwise_and(img, mask)
+    return masked_image
+
+(height, width) = sxbinary.shape
+## Region of interest
+mid_offset = 100
+left_bottom = [mid_offset, height]
+right_bottom = [width, height]
+apex = [((width+100)//2)-mid_offset, 460]
+apex2 = [((width+100)//2)+mid_offset, 460]
+corners = [left_bottom, right_bottom, apex2, apex]
+area = np.array( [corners], dtype=np.int32 )
+img_region = region_of_interest(sxbinary, area)
+```
+
+The ```corners``` variable is used to get a perspective transform. We define the following function:
+
+```
+def bird_view(img, corners):
+    offset = 50 # offset for dst points
+    img_size = (img.shape[1], img.shape[0])
+
+    src_points = np.float32(corners)
+
+    dst_points = np.float32([[offset, offset], [img_size[0]-offset, offset], 
+                                 [img_size[0]-offset, img_size[1]-offset], 
+                                 [offset, img_size[1]-offset]])
+
+    M = cv2.getPerspectiveTransform(src_points, dst_points)
+    M_inv = cv2.getPerspectiveTransform(dst_points, src_points)
+    warped = cv2.warpPerspective(img, M, img_size)
+    return warped, M, M_inv
+
+bird_view, M, M_inv = bird_view(img_region, corners[::-1])
+```
+
+The result is:
+![](results/05_bird_view.jpg)
 
 
 ## How to write a README
