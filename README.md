@@ -75,7 +75,7 @@ We obtain the following result:
 Lets print all the rgb channels for a image taken in the lane lines context.
 
 The following image will be used to identify the color transforms:
-![](curved-lane.jpg)
+![](straight_lines1.jpg)
 
 The RGB channels printed as gray scale looks like this:
 
@@ -148,7 +148,25 @@ The result obtained is:
 
 ![](results/04_sobel_binary_x.jpg)
 
-## Make a Perspective Transform ##
+Another analisys was to implement a threshold in the same selected channel, with the following method:
+```
+def binary(img, thresh_min, thresh_max):
+    binary = np.zeros_like(scaled_sobel)
+    binary[(img >= thresh_min) & (img <= thresh_max)] = 1
+    return binary
+```
+
+The implementation was:
+```
+b_image = binary(selected_channel, 120, 255)
+plt.imshow(b_image, cmap='gray')
+```
+
+The result is:
+![](results/04_binary_threshold.jpg)
+
+
+# Make a Perspective Transform ##
 To make a perspective transform, the points are selected based on the region of interest made in the previous project, so we use the following function and its implementation as a reference:
 
 ```
@@ -176,6 +194,41 @@ corners = [left_bottom, right_bottom, apex2, apex]
 area = np.array( [corners], dtype=np.int32 )
 img_region = region_of_interest(sxbinary, area)
 ```
+The following code is used to check the regions that we want to check for our perspective trasnform:
+
+```
+(height, width) = img_lane.shape[:2]
+mid_offset = 105
+bottom_offset = 220
+x_offset = -20
+
+left_bottom = (0 + bottom_offset + x_offset, height)
+right_bottom = (width - bottom_offset + x_offset + 70, height)
+apex = (((width+100)//2)-mid_offset + x_offset, 470)
+apex2 = (((width+100)//2)+mid_offset + x_offset - 60, 470)
+corners = [left_bottom, right_bottom, apex2, apex]
+
+def draw_region(img, vertices):
+    line_color = (255, 0, 0)
+    thickness = 9
+    
+    image = np.copy(img)
+    
+    image = cv2.line(image, vertices[0], vertices[1], line_color, thickness)
+    image = cv2.line(image, vertices[1], vertices[2], line_color, thickness)
+    image = cv2.line(image, vertices[2], vertices[3], line_color, thickness)
+    image = cv2.line(image, vertices[3], vertices[0], line_color, thickness)
+        
+    
+    return image
+
+rgb_lane_lines = cv2.cvtColor(img_lane, cv2.COLOR_BGR2RGB)
+img_region_lines = draw_region(rgb_lane_lines, corners)
+plt.imshow(img_region_lines)
+```
+
+The result is:
+![](results/05_lines_perspective.jpg)
 
 The ```corners``` variable is used to get a perspective transform. We define the following function:
 
@@ -198,9 +251,11 @@ def bird_view(img, corners):
 bird_view, M, M_inv = bird_view(img_region, corners[::-1])
 ```
 
-The result is:
+The result after implement ```bird_view``` function on the binary image is:
 ![](results/05_bird_view.jpg)
 
+## Identify left and right lane lines ##
+At htis point the perspective and binary transform shows a nice job.
 
 ## How to write a README
 A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
