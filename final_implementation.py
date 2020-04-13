@@ -9,7 +9,7 @@ from moviepy.editor import VideoFileClip
 from IPython.display import HTML
 
 
-class Line():
+class Lines():
     def __init__(self):
         # polynomial coefficients averaged over the last n iterations
         self.best_fit = None
@@ -185,6 +185,18 @@ def birds_eye(img, mtx, dist):
 
     return top_down, M
 
+
+def process_image(image, mtx, dist):
+    '''
+    This processes through everything above.
+    Will return the image with car position, lane curvature, and 
+      lane lines drawn.
+    '''
+    result = draw_lines(image, mtx, dist)
+    
+    return result
+
+
 def main():
     # Grab location of calibration images
     cal_image_loc = glob.glob('camera_cal/*.jpg')
@@ -206,6 +218,6 @@ def main():
 
 if __name__ == '__main__':
     # Set the class lines equal to the variables used above
-    left_line = Line()
-    right_line = Line()
+    left_line = Lines()
+    right_line = Lines()
     main()
