@@ -2,7 +2,7 @@
 
 ### Introduction ###
 
-In this project, the objetive is to create a pipeline, using advanced computer vision techniques, to find lane lines in the road a video. The result expected should be like the following image:
+In this project, the objetive is to create a pipeline, using advanced computer vision techniques, to find lane lines in the road in a video. The result expected should be like the following image:
 
 ![Lanes Image](./examples/example_output.jpg)
 
@@ -123,16 +123,7 @@ def sobel_x(img):
 The result is:
 ![](results/04_sobel_x.jpg)
 
-```
-thresh_min = 20
-thresh_max = 150
-sxbinary = np.zeros_like(scaled_sobel)
-sxbinary[(scaled_sobel >= thresh_min) & (scaled_sobel <= thresh_max)] = 1
-plt.imshow(sxbinary, cmap='gray')
-plt.imsave('results/04_sobel_binary_x.jpg', sxbinary, cmap='gray')
-```
-
-the last method is modified, to return a binary image:
+the last method was modified, to return a binary image:
 ```
 def sobel_x_binary(img, thresh_min, thresh_max):
     sobel = cv2.Sobel(gray, cv2.CV_64F, 1, 0)
@@ -142,6 +133,13 @@ def sobel_x_binary(img, thresh_min, thresh_max):
     sxbinary = np.zeros_like(scaled_sobel)
     sxbinary[(scaled_sobel >= thresh_min) & (scaled_sobel <= thresh_max)] = 1
     return sxbinary
+```
+
+with the following parameters:
+
+```
+thresh_min = 20
+thresh_max = 200
 ```
 
 The result obtained is:
@@ -156,10 +154,9 @@ def binary(img, thresh_min, thresh_max):
     return binary
 ```
 
-The implementation was:
+And its implementation:
 ```
 b_image = binary(selected_channel, 120, 255)
-plt.imshow(b_image, cmap='gray')
 ```
 
 The result is:
@@ -167,7 +164,7 @@ The result is:
 
 
 # Make a Perspective Transform ##
-To make a perspective transform, the points are selected based on the region of interest made in the previous project, so we use the following function and its implementation as a reference:
+To make a perspective transform, the points are selected similar to the region of interest made in the previous project, so we use the following function made and its implementation as a reference:
 
 ```
 def region_of_interest(img, vertices):
@@ -218,19 +215,16 @@ def draw_region(img, vertices):
     image = cv2.line(image, vertices[1], vertices[2], line_color, thickness)
     image = cv2.line(image, vertices[2], vertices[3], line_color, thickness)
     image = cv2.line(image, vertices[3], vertices[0], line_color, thickness)
-        
-    
     return image
 
 rgb_lane_lines = cv2.cvtColor(img_lane, cv2.COLOR_BGR2RGB)
 img_region_lines = draw_region(rgb_lane_lines, corners)
-plt.imshow(img_region_lines)
 ```
 
 The result is:
 ![](results/05_lines_perspective.jpg)
 
-The ```corners``` variable is used to get a perspective transform. We define the following function:
+The ```corners``` variable from the last script is used to get a perspective transform. We define the following function to get `bird_view` transformation:
 
 ```
 def bird_view(img, corners):
@@ -256,6 +250,9 @@ The result after implement ```bird_view``` function on the binary image is:
 
 ## Identify left and right lane lines ##
 At htis point the perspective and binary transform shows a nice job.
+
+## Final pipeline ##
+The final pipeline is created in [`final_implementation.py`](./final_implementation.py) file. There, each step was wrapped in a function and documented as well.
 
 ## How to write a README
 A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
