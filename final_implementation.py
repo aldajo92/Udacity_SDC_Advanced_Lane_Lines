@@ -6,24 +6,25 @@ import glob
 from moviepy.editor import VideoFileClip
 from IPython.display import HTML
 
-left_line = None
-right_line = None
-
 
 class LanesProcessing():
-    def __init__(self, img_location):
+    def __init__(self, img_location, nx=9, ny=6):
         self.left_line = Line()
         self.right_line = Line()
+
+        self.nx = 9
+        self.ny = 6
         self.mtx = None
         self.dist = None
+
         self.img = None
 
         self._calibration(img_location)
 
     # calibration
     def _calibration(self, img_location):
-        nx = 9
-        ny = 6
+        nx = self.nx
+        ny = self.ny
 
         objp = np.zeros((nx*ny, 3), np.float32)
         objp[:, :2] = np.mgrid[0:nx, 0:ny].T.reshape(-1, 2)
@@ -54,7 +55,7 @@ class LanesProcessing():
         self.mtx = mtx
         self.dist = dist
 
-    # process_image
+    # process_image: Entry point that receives the image to process lines
     def process_image(self, img):
         result = self._draw_lines(img)
 
@@ -66,31 +67,31 @@ class LanesProcessing():
 
         return result
 
-    # sobel_x
+    # Sobel X operation
     def _sobel_x(self, img, sobel_kernel=3):
         sobel = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=sobel_kernel)
         abs_sobel = np.absolute(sobel)
         scaled_sobel = np.uint8(255*abs_sobel/np.max(abs_sobel))
         return scaled_sobel
 
-    # binary
+    # Binary operation over a  1-channel image
     def _binary(self, img, thresh_min, thresh_max):
         binary = np.zeros_like(img)
         binary[(img >= thresh_min) & (img <= thresh_max)] = 1
         return binary
 
-    # pipeline_binary
+    # Pipeline used to select red, s, and sx channel to activate binary operation
     def _pipeline_binary(self, img, s_thresh=(120, 255), sx_thresh=(10, 200),
                          r_thresh=(200, 255), sobel_kernel=3):
 
         distorted_img = np.copy(img)
         dst = cv2.undistort(distorted_img, self.mtx, self.dist, None, self.mtx)
-        # Convert to HLS colorspace
+
         hls = cv2.cvtColor(dst, cv2.COLOR_BGR2HLS).astype(np.float)
 
         r_channel = dst[:, :, 0]  # R_CHANNEL FROM RGB
         s_channel = hls[:, :, 2]  # S_CHANNEL FROM HLS
-        sx = self._sobel_x(s_channel, sobel_kernel)  # Sobel X direction S_CHANNEL
+        sx = self._sobel_x(s_channel, sobel_kernel)
 
         r_binary = self._binary(r_channel, r_thresh[0], r_thresh[1])
         s_binary = self._binary(s_channel, s_thresh[0], s_thresh[1])
@@ -102,7 +103,7 @@ class LanesProcessing():
                         | ((s_binary == 1) & (r_binary == 1))] = 1
         return combined_binary
 
-    # get_corners
+    # Get corners based on image
     def _get_corners(self, img):
         height, width = img.shape[:2]
         mid_offset = 95
@@ -121,12 +122,12 @@ class LanesProcessing():
 
         return corners
 
-    # bird_view
+    # Bird View operation with default corner function
     def _bird_view(self, img):
         corners = self._get_corners(img)
         return self._bird_view_corners(img, corners)
 
-    # bird_view_corners
+    # Bird View operation with corners parameter
     def _bird_view_corners(self, img, corners):
         height, width = img.shape[:2]
         # corners = get_corners(img)
@@ -144,7 +145,7 @@ class LanesProcessing():
         warped = cv2.warpPerspective(img, M, (width, height))
         return warped, M
 
-    # draw_region
+    # Helper function to draw region
     def _draw_region(self, img, vertices):
         line_color = (255, 0, 0)
         thickness = 9
@@ -161,11 +162,11 @@ class LanesProcessing():
 
     # sliding_window
     def _sliding_window(self, x_current, margin, minpix, nonzerox, nonzeroy,
-                       win_y_low, win_y_high, window_max, counter, side):
-        # Identify window boundaries
+                        win_y_low, win_y_high, window_max, counter, side):
+        # Window boundaries
         win_x_low = x_current - margin
         win_x_high = x_current + margin
-        # Identify the nonzero pixels in x and y within the window
+        # Nonzero pixels in x and y within the window
         good_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high)
                      & (nonzerox >= win_x_low)
                      & (nonzerox < win_x_high)).nonzero()[0]
@@ -181,14 +182,19 @@ class LanesProcessing():
 
         return good_inds, x_current
 
-    # first_lines
+    # Histogram to the half image to get left and right peaks.
+    def _lr_peaks_histogram(self, bird_view):
+        bottom_half = bird_view[bird_view.shape[0]//2:, :]
+        histogram = np.sum(bottom_half, axis=0)
+        return histogram, bottom_half
+
+    # Extract First Lines information
     def _first_lines(self, img):
         binary_img = self._pipeline_binary(img)
-        binary_warped, perspective_M = self._bird_view(binary_img)
+        bird_view, perspective_M = self._bird_view(binary_img)
 
-        # apply histogram to the half image to get left and right peaks.
-        bottom_half = binary_warped[binary_warped.shape[0]//2:, :]
-        histogram = np.sum(bottom_half, axis=0)
+        histogram, bottom_half = self._lr_peaks_histogram(bird_view)
+
         midpoint = np.int(histogram.shape[0]/2)
         leftx_base = np.argmax(histogram[:midpoint])
         rightx_base = np.argmax(histogram[midpoint:]) + midpoint
@@ -197,10 +203,10 @@ class LanesProcessing():
         nwindows = 35
 
         # Set height of windows
-        window_height = np.int(binary_warped.shape[0]/nwindows)
+        window_height = np.int(bird_view.shape[0]/nwindows)
 
         # Identify the x and y positions of all nonzero pixels in the image
-        nonzero = binary_warped.nonzero()
+        nonzero = bird_view.nonzero()
         nonzeroy = np.array(nonzero[0])
         nonzerox = np.array(nonzero[1])
 
@@ -208,13 +214,13 @@ class LanesProcessing():
         leftx_current = leftx_base
         rightx_current = rightx_base
 
-        # Set the width of the windows +/- margin
+        # Width of the windows +/- margin
         margin = 100
 
-        # Set minimum number of pixels found to recenter window
+        # Minimum number of pixels found to recenter window
         minpix = 50
 
-        # Create empty lists to receive left and right lane pixel indices
+        # Empty lists to receive left and right lane pixel indices
         left_lane_inds = []
         right_lane_inds = []
         left_tracker = True
@@ -223,26 +229,30 @@ class LanesProcessing():
 
         # Step through the windows one by one
         for window in range(nwindows):
-            win_y_low = binary_warped.shape[0] - (window+1)*window_height
-            win_y_high = binary_warped.shape[0] - window*window_height
-            window_max = binary_warped.shape[1]
+            win_y_low = bird_view.shape[0] - (window+1)*window_height
+            win_y_high = bird_view.shape[0] - window*window_height
+            window_max = bird_view.shape[1]
             if left_tracker == True and right_tracker == True:
-                good_left_inds, leftx_current = self._sliding_window(leftx_current, margin, minpix, nonzerox, nonzeroy,
-                                                               win_y_low, win_y_high, window_max, counter, 'left')
-                good_right_inds, rightx_current = self._sliding_window(rightx_current, margin, minpix, nonzerox, nonzeroy,
-                                                                 win_y_low, win_y_high, window_max, counter, 'right')
+                good_left_inds, leftx_current = self._sliding_window(
+                    leftx_current, margin, minpix, nonzerox, nonzeroy,
+                    win_y_low, win_y_high, window_max, counter, 'left')
+                good_right_inds, rightx_current = self._sliding_window(
+                    rightx_current, margin, minpix, nonzerox, nonzeroy,
+                    win_y_low, win_y_high, window_max, counter, 'right')
                 # Append these indices to the lists
                 left_lane_inds.append(good_left_inds)
                 right_lane_inds.append(good_right_inds)
                 counter += 1
             elif left_tracker == True:
-                good_left_inds, leftx_current = self._sliding_window(leftx_current, margin, minpix, nonzerox, nonzeroy,
-                                                               win_y_low, win_y_high, window_max, counter, 'left')
+                good_left_inds, leftx_current = self._sliding_window(
+                    leftx_current, margin, minpix, nonzerox, nonzeroy,
+                    win_y_low, win_y_high, window_max, counter, 'left')
                 # Append these indices to the list
                 left_lane_inds.append(good_left_inds)
             elif right_tracker == True:
-                good_right_inds, rightx_current = self._sliding_window(rightx_current, margin, minpix, nonzerox, nonzeroy,
-                                                                 win_y_low, win_y_high, window_max, counter, 'right')
+                good_right_inds, rightx_current = self._sliding_window(
+                    rightx_current, margin, minpix, nonzerox, nonzeroy,
+                    win_y_low, win_y_high, window_max, counter, 'right')
                 # Append these indices to the list
                 right_lane_inds.append(good_right_inds)
             else:
@@ -260,16 +270,15 @@ class LanesProcessing():
 
         self.left_line.fit_line(leftx, lefty, True)
         self.right_line.fit_line(rightx, righty, True)
-        # return histogram, leftx, lefty, rightx, righty
 
-    # second_ord_poly
+    # Second_order Poly to calculate the middle of the lane
     def _second_ord_poly(self, line, val):
         a = line[0]
         b = line[1]
         c = line[2]
         return (a*val**2)+(b*val)+c
 
-    # draw_lines
+    # Draw Lines with information about finding lanes
     def _draw_lines(self, img):
         binary = self._pipeline_binary(img)
         binary_warped, perspective_M = self._bird_view(binary)
@@ -277,8 +286,6 @@ class LanesProcessing():
         # Check if lines were last detected; if not, re-run first_lines
         if self.left_line.detected == False or self.right_line.detected == False:
             self._first_lines(img)
-            # self.left_line.fit_line(leftx, lefty, True)
-            # self.right_line.fit_line(rightx, righty, True)
 
         # Set the fit as the current fit for now
         left_fit = self.left_line.current_fit
@@ -406,19 +413,18 @@ class LanesProcessing():
 
         return result
 
-##########################################################################################
 
 class Line():
     def __init__(self):
         # polynomial coefficients averaged over the last n iterations
         self.best_fit = None
-        # Initialize all others not carried over between first detections
+        # All others not carried over between first detections
         self.reset()
 
     def reset(self):
         # was the line detected in the last iteration?
         self.detected = False
-        # recent polynomial coefficients
+        # polynomial coefficients
         self.recent_fit = []
         # polynomial coefficients for the most recent fit
         self.current_fit = [np.array([False])]
@@ -428,22 +434,6 @@ class Line():
         self.allx = None
         # y values for detected line pixels
         self.ally = None
-        # counter to reset after 5 iterations if issues arise
-        self.counter = 0
-
-    ''' 
-    Resets the line class upon failing five times in a row.
-    '''
-
-    def count_check(self):
-        # self.counter += 1
-        # Reset if failed five times
-        if self.counter >= 5:
-            self.reset()
-
-    '''
-    Fit a second order polynomial to the line.
-    '''
 
     def fit_line(self, x_points, y_points, first_try=True):
         try:
@@ -459,7 +449,6 @@ class Line():
             self.best_fit = np.mean(self.recent_fit, axis=0)
             line_fit = self.current_fit
             self.detected = True
-            self.counter = 0
 
             return line_fit
 
@@ -467,26 +456,27 @@ class Line():
             line_fit = self.best_fit
             if first_try == True:
                 self.reset()
-            else:
-                self.count_check()
 
             return line_fit
 
 
+# Function to get input video and transform using LanesProcessing Object
 def main():
-    # Location of calibration images
-    img_location = 'camera_cal/calibration*.jpg'
+    # Lane processing object
     laneProcessing = LanesProcessing('camera_cal/calibration*.jpg')
 
-    # Convert to video
-    vid_output = './videos/output_vid.mp4'
+    # Path to the clip input
+    video_input = './videos/output_vid.mp4'
+    # Path to the clip output
+    video_output = './videos/output_vid.mp4'
 
     # clip1 = VideoFileClip('./videos/project_video.mp4').subclip(20,30)
-    clip1 = VideoFileClip('./videos/project_video.mp4')
+    clip1 = VideoFileClip(video_input)
 
-    # This function expects 3-channel images
-    vid_clip = clip1.fl_image(lambda image: laneProcessing.process_image(image))
-    vid_clip.write_videofile(vid_output, audio=False)
+    # This operation expects 3-channel images
+    vid_clip = clip1.fl_image(
+        lambda image: laneProcessing.process_image(image))
+    vid_clip.write_videofile(video_output, audio=False)
 
 
 if __name__ == '__main__':
