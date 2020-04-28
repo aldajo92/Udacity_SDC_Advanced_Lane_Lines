@@ -12,8 +12,8 @@ class LanesProcessing():
         self.left_line = Line()
         self.right_line = Line()
 
-        self.nx = 9
-        self.ny = 6
+        self.nx = nx
+        self.ny = ny
         self.mtx = None
         self.dist = None
 
@@ -48,24 +48,28 @@ class LanesProcessing():
                 # draw corners
                 cv2.drawChessboardCorners(img, (nx, ny), corners, ret)
 
-        ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints,
-                                                           gray.shape[::-
-                                                                      1], None,
-                                                           None)
+        ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
+            objpoints, imgpoints, gray.shape[::-1], None, None)
         self.mtx = mtx
         self.dist = dist
 
     # process_image: Entry point that receives the image to process lines
     def process_image(self, img):
         result = self._draw_lines(img)
-
-        # arr = np.zeros((result.shape[0],result.shape[1],3))
-        # arr[:,:,0] = result
-        # arr[:,:,1] = result
-        # arr[:,:,2] = result
-        # new_arr = arr.dot(255)
-
         return result
+    
+    # Just for proof of concept
+    def bird_view_binary(self, img):
+        binary = self._pipeline_binary(img)
+        bird_view, _ = self._bird_view(binary)
+
+        arr = np.zeros((bird_view.shape[0],bird_view.shape[1],3))
+        arr[:,:,0] = bird_view
+        arr[:,:,1] = bird_view
+        arr[:,:,2] = bird_view
+        new_arr = arr.dot(255)
+
+        return new_arr
 
     # Sobel X operation
     def _sobel_x(self, img, sobel_kernel=3):
@@ -463,19 +467,33 @@ class Line():
 # Function to get input video and transform using LanesProcessing Object
 def main():
     # Lane processing object
-    laneProcessing = LanesProcessing('camera_cal/calibration*.jpg')
+    processing = LanesProcessing('camera_cal/calibration*.jpg')
 
     # Path to the clip input
-    video_input = './videos/output_vid.mp4'
+    video_input = './videos/project_video.mp4'
     # Path to the clip output
     video_output = './videos/output_vid.mp4'
 
-    # clip1 = VideoFileClip('./videos/project_video.mp4').subclip(20,30)
     clip1 = VideoFileClip(video_input)
 
     # This operation expects 3-channel images
-    vid_clip = clip1.fl_image(
-        lambda image: laneProcessing.process_image(image))
+    vid_clip = clip1.fl_image(lambda frame: processing.process_image(frame))
+    vid_clip.write_videofile(video_output, audio=False)
+
+# Just for proof of concepts
+def generate_bird_view_video():
+    # Lane processing object
+    processing = LanesProcessing('camera_cal/calibration*.jpg')
+
+    # Path to the clip input
+    video_input = './videos/project_video.mp4'
+    # Path to the clip output
+    video_output = './videos/bird_view_binary.mp4'
+
+    clip1 = VideoFileClip(video_input).subclip(20,30)
+
+    # This operation expects 3-channel images
+    vid_clip = clip1.fl_image(lambda frame: processing.bird_view_binary(frame))
     vid_clip.write_videofile(video_output, audio=False)
 
 
