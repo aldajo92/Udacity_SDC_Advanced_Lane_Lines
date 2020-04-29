@@ -250,11 +250,23 @@ The result after implement ```bird_view``` function on the binary image is:
 
 ## Identify left and right lane lines ##
 At htis point the perspective and binary transformations shows a nice job.
-Using the half image
+Using the half image from bird view, with the following code, the peaks asociated with the left and right lane are visible in the histogram:
+
+```
+def hist(img):
+    bottom_half = img[img.shape[0]//2:,:]
+    histogram = np.sum(bottom_half, axis=0)
+    return histogram, bottom_half
+
+histogram, bottom_half = hist(bird_view)
+```
 
 ![](results/06_histogram.png)
 
-[add sliding window]
+Using sliding windows
+
+## Calculate the radious of curvature
+
 
 ## Final pipeline ##
 The final pipeline is created in [`final_implementation.py`](./final_implementation.py) file. There, each step was wrapped in a function inside a class named LanesProcessing and tested with the [`final_implementation.ipynb`](./final_implementation.ipynb) notebook.

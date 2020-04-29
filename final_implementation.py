@@ -16,6 +16,8 @@ class LanesProcessing():
         self.ny = ny
         self.mtx = None
         self.dist = None
+        self.m_bird_view = np.empty(1)
+        self.m_inv_bird_view = np.empty(1)
 
         self.img = None
 
@@ -53,22 +55,16 @@ class LanesProcessing():
         self.mtx = mtx
         self.dist = dist
 
-    # process_image: Entry point that receives the image to process lines
-    def process_image(self, img):
-        result = self._draw_lines(img)
-        return result
-    
     # Just for proof of concept
     def bird_view_binary(self, img):
         binary = self._pipeline_binary(img)
         bird_view, _ = self._bird_view(binary)
 
-        arr = np.zeros((bird_view.shape[0],bird_view.shape[1],3))
-        arr[:,:,0] = bird_view
-        arr[:,:,1] = bird_view
-        arr[:,:,2] = bird_view
+        arr = np.zeros((bird_view.shape[0], bird_view.shape[1], 3))
+        arr[:, :, 0] = bird_view
+        arr[:, :, 1] = bird_view
+        arr[:, :, 2] = bird_view
         new_arr = arr.dot(255)
-
         return new_arr
 
     # Sobel X operation
@@ -145,9 +141,15 @@ class LanesProcessing():
                                 [offset, 0]
                                 ])
 
-        M = cv2.getPerspectiveTransform(src_points, dst_points)
-        warped = cv2.warpPerspective(img, M, (width, height))
-        return warped, M
+        # if (self.m_bird_view == np.empty(1))[0]:
+        m_matrix = cv2.getPerspectiveTransform(src_points, dst_points)
+        # Transform matrix from birds_eye
+        self.m_bird_view = m_matrix
+        # Invert the transform matrix from birds_eye
+        self.m_inv_bird_view = np.linalg.inv(m_matrix)
+
+        warped = cv2.warpPerspective(img, self.m_bird_view, (width, height))
+        return warped
 
     # Helper function to draw region
     def _draw_region(self, img, vertices):
@@ -195,7 +197,7 @@ class LanesProcessing():
     # Extract First Lines information
     def _first_lines(self, img):
         binary_img = self._pipeline_binary(img)
-        bird_view, perspective_M = self._bird_view(binary_img)
+        bird_view = self._bird_view(binary_img)
 
         histogram, bottom_half = self._lr_peaks_histogram(bird_view)
 
@@ -282,11 +284,21 @@ class LanesProcessing():
         c = line[2]
         return (a*val**2)+(b*val)+c
 
-    # Draw Lines with information about finding lanes
-    def _draw_lines(self, img):
-        binary = self._pipeline_binary(img)
-        binary_warped, perspective_M = self._bird_view(binary)
+    def _show_image_information(self, image, radious, dist_from_center):
+        if dist_from_center >= 0:
+            center_text = 'Vehicle is {} meters left of center'.format(
+                round(dist_from_center, 2))
+        else:
+            center_text = 'Vehicle is {} meters right of center'.format(
+                round(-dist_from_center, 2))
 
+        # Show information over the image
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        cv2.putText(image, radious, (50, 50), font, 1, (255, 255, 255), 2)
+        cv2.putText(image, center_text, (50, 100), font, 1, (255, 255, 255), 2)
+
+    # detect left and right lanes from img and binary images precalculated
+    def _detect_left_right_lanes(self, img, binary_warped):
         # Check if lines were last detected; if not, re-run first_lines
         if self.left_line.detected == False or self.right_line.detected == False:
             self._first_lines(img)
@@ -295,23 +307,24 @@ class LanesProcessing():
         left_fit = self.left_line.current_fit
         right_fit = self.right_line.current_fit
 
-        # Again, find the lane indicators
+        # Grab activated pixels
         nonzero = binary_warped.nonzero()
         nonzeroy = np.array(nonzero[0])
         nonzerox = np.array(nonzero[1])
+
         margin = 100
-        left_lane_inds = ((nonzerox > (left_fit[0]*(nonzeroy**2) + left_fit[1]*nonzeroy + left_fit[2] - margin))
-                          & (nonzerox < (left_fit[0]*(nonzeroy**2) + left_fit[1]*nonzeroy + left_fit[2] + margin)))
-        right_lane_inds = ((nonzerox > (right_fit[0]*(nonzeroy**2) + right_fit[1]*nonzeroy + right_fit[2] - margin))
-                           & (nonzerox < (right_fit[0]*(nonzeroy**2) + right_fit[1]*nonzeroy + right_fit[2] + margin)))
+        l_lane_inds = ((nonzerox > (left_fit[0]*(nonzeroy**2) + left_fit[1]*nonzeroy + left_fit[2] - margin))
+                       & (nonzerox < (left_fit[0]*(nonzeroy**2) + left_fit[1]*nonzeroy + left_fit[2] + margin)))
+        r_lane_inds = ((nonzerox > (right_fit[0]*(nonzeroy**2) + right_fit[1]*nonzeroy + right_fit[2] - margin))
+                       & (nonzerox < (right_fit[0]*(nonzeroy**2) + right_fit[1]*nonzeroy + right_fit[2] + margin)))
 
-        # Set the x and y values of points on each line
-        leftx = nonzerox[left_lane_inds]
-        lefty = nonzeroy[left_lane_inds]
-        rightx = nonzerox[right_lane_inds]
-        righty = nonzeroy[right_lane_inds]
+        # Extract left and right line pixel positions
+        leftx = nonzerox[l_lane_inds]
+        lefty = nonzeroy[l_lane_inds]
+        rightx = nonzerox[r_lane_inds]
+        righty = nonzeroy[r_lane_inds]
 
-        # Fit a second order polynomial to each again.
+        # Fit new polynomials
         left_fit = self.left_line.fit_line(leftx, lefty, False)
         right_fit = self.right_line.fit_line(rightx, righty, False)
 
@@ -320,27 +333,45 @@ class LanesProcessing():
         fit_leftx = left_fit[0]*fity**2 + left_fit[1]*fity + left_fit[2]
         fit_rightx = right_fit[0]*fity**2 + right_fit[1]*fity + right_fit[2]
 
-        # Create an image to draw on and an image to show the selection window
+        # 1. Create an image to draw on and an image to show the selection window
         out_img = np.dstack((binary_warped, binary_warped, binary_warped))*255
         window_img = np.zeros_like(out_img)
 
-        # Color in left and right line pixels
-        out_img[nonzeroy[left_lane_inds],
-                nonzerox[left_lane_inds]] = [255, 0, 0]
-        out_img[nonzeroy[right_lane_inds],
-                nonzerox[right_lane_inds]] = [0, 0, 255]
+        # 2. Color in left and right line pixels
+        out_img[nonzeroy[l_lane_inds], nonzerox[l_lane_inds]] = [255, 0, 0]
+        out_img[nonzeroy[r_lane_inds], nonzerox[r_lane_inds]] = [0, 0, 255]
 
-        # Generate a polygon to illustrate the search window area
+        # 3. Generate a polygon to illustrate the search window area
+        # And recast the x and y points into usable format for cv2.fillPoly()
         left_line_window1 = np.array(
             [np.transpose(np.vstack([fit_leftx-margin, fity]))])
+
         left_line_window2 = np.array(
             [np.flipud(np.transpose(np.vstack([fit_leftx+margin, fity])))])
+
         left_line_pts = np.hstack((left_line_window1, left_line_window2))
+
         right_line_window1 = np.array(
             [np.transpose(np.vstack([fit_rightx-margin, fity]))])
+
         right_line_window2 = np.array(
             [np.flipud(np.transpose(np.vstack([fit_rightx+margin, fity])))])
+
         right_line_pts = np.hstack((right_line_window1, right_line_window2))
+
+        return out_img, left_fit, right_fit, fity, fit_leftx, fit_rightx
+
+    # process image function that returns information about finding lanes
+    def process_image(self, img):
+        binary = self._pipeline_binary(img)
+        binary_warped = self._bird_view(binary)
+
+        (out_img,
+         left_fit,
+         right_fit,
+         fity,
+         fit_leftx,
+         fit_rightx) = self._detect_left_right_lanes(img, binary_warped)
 
         # Calculate the pixel curve radius
         y_eval = np.max(fity)
@@ -359,7 +390,7 @@ class LanesProcessing():
         right_fit_cr = np.polyfit(self.right_line.all_y*ym_per_pix,
                                   self.right_line.all_x*xm_per_pix, 2)
 
-        # Calculate the new radii of curvature
+        # Calculate the new radius of curvature
         left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix +
                                left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
         right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix +
@@ -380,20 +411,6 @@ class LanesProcessing():
 
         # Calculate distance from center and list differently based on left or right
         dist_from_center = lane_mid - car_position
-        if dist_from_center >= 0:
-            center_text = '{} meters left of center'.format(
-                round(dist_from_center, 2))
-        else:
-            center_text = '{} meters right of center'.format(
-                round(-dist_from_center, 2))
-
-        # List car's position in relation to middle on the image and radius of curvature
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        cv2.putText(img, center_text, (10, 50), font, 1, (255, 255, 255), 2)
-        cv2.putText(img, rad_text, (10, 100), font, 1, (255, 255, 255), 2)
-
-        # Invert the transform matrix from birds_eye
-        Minv = np.linalg.inv(perspective_M)
 
         # Create an image to draw the lines on
         warp_zero = np.zeros_like(binary_warped).astype(np.uint8)
@@ -405,16 +422,18 @@ class LanesProcessing():
             [np.flipud(np.transpose(np.vstack([fit_rightx, fity])))])
         pts = np.hstack((pts_left, pts_right))
 
-        # Draw the lane onto the warped blank image
+        # 4. Draw the lane onto the warped blank image
         cv2.fillPoly(color_warp, np.int_([pts]), (0, 255, 0))
+        img_colored_lines = cv2.addWeighted(out_img, 1, color_warp, 0.4, 0)
 
         # Warp the blank back to original image space using inverse perspective matrix (Minv)
         newwarp = cv2.warpPerspective(
-            color_warp, Minv, (img.shape[1], img.shape[0]))
+            img_colored_lines, self.m_inv_bird_view, (img.shape[1], img.shape[0]))
 
-        # Combine the result with the original image
-        result = cv2.addWeighted(img, 1, newwarp, 0.3, 0)
+        # Combine the warp and original image
+        result = cv2.addWeighted(newwarp, 0.4, img, 0.6, 0)
 
+        self._show_image_information(result, rad_text, dist_from_center)
         return result
 
 
@@ -481,6 +500,8 @@ def main():
     vid_clip.write_videofile(video_output, audio=False)
 
 # Just for proof of concepts
+
+
 def generate_bird_view_video():
     # Lane processing object
     processing = LanesProcessing('camera_cal/calibration*.jpg')
@@ -490,7 +511,7 @@ def generate_bird_view_video():
     # Path to the clip output
     video_output = './videos/bird_view_binary.mp4'
 
-    clip1 = VideoFileClip(video_input).subclip(20,30)
+    clip1 = VideoFileClip(video_input).subclip(20, 30)
 
     # This operation expects 3-channel images
     vid_clip = clip1.fl_image(lambda frame: processing.bird_view_binary(frame))
