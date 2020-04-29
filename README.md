@@ -249,10 +249,15 @@ The result after implement ```bird_view``` function on the binary image is:
 ![](results/05_bird_view.jpg)
 
 ## Identify left and right lane lines ##
-At htis point the perspective and binary transform shows a nice job.
+At htis point the perspective and binary transformations shows a nice job.
+Using the half image
+
+![](results/06_histogram.png)
+
+[add sliding window]
 
 ## Final pipeline ##
-The final pipeline is created in [`final_implementation.py`](./final_implementation.py) file. There, each step was wrapped in a function and documented as well.
+The final pipeline is created in [`final_implementation.py`](./final_implementation.py) file. There, each step was wrapped in a function inside a class named LanesProcessing and tested with the [`final_implementation.ipynb`](./final_implementation.ipynb) notebook.
 
 ## How to write a README
 A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
