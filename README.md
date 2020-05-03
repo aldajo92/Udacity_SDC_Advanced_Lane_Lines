@@ -253,17 +253,17 @@ At htis point the perspective and binary transformations shows a nice job.
 Using the half image from bird view, with the following code, the peaks asociated with the left and right lane are visible in the histogram:
 
 ```
-def hist(img):
+def _lr_peaks_histogram(img):
     bottom_half = img[img.shape[0]//2:,:]
     histogram = np.sum(bottom_half, axis=0)
     return histogram, bottom_half
 
-histogram, bottom_half = hist(bird_view)
+histogram, bottom_half = _lr_peaks_histogram(bird_view)
 ```
 
 ![](results/06_histogram.png)
 
-Using sliding windows
+<!-- Using sliding windows -->
 
 ## Calculate the radious of curvature
 
