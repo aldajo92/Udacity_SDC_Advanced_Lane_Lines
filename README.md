@@ -268,6 +268,7 @@ histogram, bottom_half = _lr_peaks_histogram(bird_view)
 ## Calculate the radious of curvature
 
 
+
 ## Final pipeline ##
 The final pipeline is created in [`final_implementation.py`](./final_implementation.py) file. There, each step was wrapped in a function inside a class named LanesProcessing and tested with the [`final_implementation.ipynb`](./final_implementation.ipynb) notebook.
 

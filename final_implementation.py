@@ -166,28 +166,6 @@ class LanesProcessing():
                          vertices[0], line_color, thickness)
         return image
 
-    # sliding_window
-    def _sliding_window(self, x_current, margin, minpix, nonzerox, nonzeroy,
-                        win_y_low, win_y_high, window_max, counter, side):
-        # Window boundaries
-        win_x_low = x_current - margin
-        win_x_high = x_current + margin
-        # Nonzero pixels in x and y within the window
-        good_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high)
-                     & (nonzerox >= win_x_low)
-                     & (nonzerox < win_x_high)).nonzero()[0]
-        # If you found > minpix pixels, recenter next window on their mean position
-        if len(good_inds) > minpix:
-            x_current = np.int(np.mean(nonzerox[good_inds]))
-        if counter >= 5:
-            if win_x_high > window_max or win_x_low < 0:
-                if side == 'left':
-                    left_tracker = False
-                else:
-                    right_tracker = False
-
-        return good_inds, x_current
-
     # Histogram to the half image to get left and right peaks.
     def _lr_peaks_histogram(self, bird_view):
         bottom_half = bird_view[bird_view.shape[0]//2:, :]
@@ -195,24 +173,18 @@ class LanesProcessing():
         return histogram, bottom_half
 
     # Extract First Lines information
-    def _first_lines(self, img):
-        binary_img = self._pipeline_binary(img)
-        bird_view = self._bird_view(binary_img)
-
-        histogram, bottom_half = self._lr_peaks_histogram(bird_view)
+    def _first_lines(self, binary_warped, draw_windows=False, update_fit=True):
+        histogram, bottom_half = self._lr_peaks_histogram(binary_warped)
 
         midpoint = np.int(histogram.shape[0]/2)
         leftx_base = np.argmax(histogram[:midpoint])
         rightx_base = np.argmax(histogram[midpoint:]) + midpoint
 
-        # Number of sliding windows
-        nwindows = 35
-
-        # Set height of windows
-        window_height = np.int(bird_view.shape[0]/nwindows)
-
+        out_img = None
+        if draw_windows:
+            out_img = np.dstack((binary_warped, binary_warped, binary_warped))
         # Identify the x and y positions of all nonzero pixels in the image
-        nonzero = bird_view.nonzero()
+        nonzero = binary_warped.nonzero()
         nonzeroy = np.array(nonzero[0])
         nonzerox = np.array(nonzero[1])
 
@@ -229,44 +201,52 @@ class LanesProcessing():
         # Empty lists to receive left and right lane pixel indices
         left_lane_inds = []
         right_lane_inds = []
-        left_tracker = True
-        right_tracker = True
-        counter = 0
 
-        # Step through the windows one by one
+        # Number of sliding windows
+        nwindows = 35
+
+        # Set height of windows
+        window_height = np.int(binary_warped.shape[0]/nwindows)
+
         for window in range(nwindows):
-            win_y_low = bird_view.shape[0] - (window+1)*window_height
-            win_y_high = bird_view.shape[0] - window*window_height
-            window_max = bird_view.shape[1]
-            if left_tracker == True and right_tracker == True:
-                good_left_inds, leftx_current = self._sliding_window(
-                    leftx_current, margin, minpix, nonzerox, nonzeroy,
-                    win_y_low, win_y_high, window_max, counter, 'left')
-                good_right_inds, rightx_current = self._sliding_window(
-                    rightx_current, margin, minpix, nonzerox, nonzeroy,
-                    win_y_low, win_y_high, window_max, counter, 'right')
-                # Append these indices to the lists
-                left_lane_inds.append(good_left_inds)
-                right_lane_inds.append(good_right_inds)
-                counter += 1
-            elif left_tracker == True:
-                good_left_inds, leftx_current = self._sliding_window(
-                    leftx_current, margin, minpix, nonzerox, nonzeroy,
-                    win_y_low, win_y_high, window_max, counter, 'left')
-                # Append these indices to the list
-                left_lane_inds.append(good_left_inds)
-            elif right_tracker == True:
-                good_right_inds, rightx_current = self._sliding_window(
-                    rightx_current, margin, minpix, nonzerox, nonzeroy,
-                    win_y_low, win_y_high, window_max, counter, 'right')
-                # Append these indices to the list
-                right_lane_inds.append(good_right_inds)
-            else:
-                break
+            # Identify window boundaries in x and y (and right and left)
+            win_y_low = binary_warped.shape[0] - (window+1)*window_height
+            win_y_high = binary_warped.shape[0] - window*window_height
+            win_xleft_low = leftx_current - margin
+            win_xleft_high = leftx_current + margin
+            win_xright_low = rightx_current - margin
+            win_xright_high = rightx_current + margin
+            
+            # Draw the windows on the visualization image
+            if draw_windows:
+                cv2.rectangle(out_img,(win_xleft_low,win_y_low),
+                (win_xleft_high,win_y_high),(0,255,0), 4) 
+                cv2.rectangle(out_img,(win_xright_low,win_y_low),
+                (win_xright_high,win_y_high),(0,255,0), 4)
+            
+            # Identify the nonzero pixels in x and y within the window #
+            good_left_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & 
+            (nonzerox >= win_xleft_low) &  (nonzerox < win_xleft_high)).nonzero()[0]
+            good_right_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & 
+            (nonzerox >= win_xright_low) &  (nonzerox < win_xright_high)).nonzero()[0]
+            
+            # Append these indices to the lists
+            left_lane_inds.append(good_left_inds)
+            right_lane_inds.append(good_right_inds)
+            
+            # If you found > minpix pixels, recenter next window on their mean position
+            if len(good_left_inds) > minpix:
+                leftx_current = np.int(np.mean(nonzerox[good_left_inds]))
+            if len(good_right_inds) > minpix:        
+                rightx_current = np.int(np.mean(nonzerox[good_right_inds]))
 
-        # Concatenate the arrays of indices
-        left_lane_inds = np.concatenate(left_lane_inds)
-        right_lane_inds = np.concatenate(right_lane_inds)
+        # Concatenate the arrays of indices (previously was a list of lists of pixels)
+        try:
+            left_lane_inds = np.concatenate(left_lane_inds)
+            right_lane_inds = np.concatenate(right_lane_inds)
+        except ValueError:
+            # Avoids an error if the above is not implemented fully
+            pass
 
         # Extract left and right line pixel positions
         leftx = nonzerox[left_lane_inds]
@@ -274,14 +254,21 @@ class LanesProcessing():
         rightx = nonzerox[right_lane_inds]
         righty = nonzeroy[right_lane_inds]
 
-        self.left_line.fit_line(leftx, lefty, True)
-        self.right_line.fit_line(rightx, righty, True)
+        if update_fit:
+            self.left_line.fit_line(leftx, lefty, True)
+            self.right_line.fit_line(rightx, righty, True)
+        
+        if draw_windows:
+            out_img[lefty, leftx] = [255, 0, 0]
+            out_img[righty, rightx] = [0, 0, 255]
+
+        return out_img
 
     # Second_order Poly to calculate the middle of the lane
-    def _second_ord_poly(self, line, val):
-        a = line[0]
-        b = line[1]
-        c = line[2]
+    def _second_ord_poly(self, poly_values, val):
+        a = poly_values[0]
+        b = poly_values[1]
+        c = poly_values[2]
         return (a*val**2)+(b*val)+c
 
     def _show_image_information(self, image, radious, dist_from_center):
@@ -298,10 +285,10 @@ class LanesProcessing():
         cv2.putText(image, center_text, (50, 100), font, 1, (255, 255, 255), 2)
 
     # detect left and right lanes from img and binary images precalculated
-    def _detect_left_right_lanes(self, img, binary_warped):
+    def _detect_left_right_lanes(self, binary_warped):
         # Check if lines were last detected; if not, re-run first_lines
         if self.left_line.detected == False or self.right_line.detected == False:
-            self._first_lines(img)
+            _ = self._first_lines(binary_warped)
 
         # Set the fit as the current fit for now
         left_fit = self.left_line.current_fit
@@ -333,31 +320,31 @@ class LanesProcessing():
         fit_leftx = left_fit[0]*fity**2 + left_fit[1]*fity + left_fit[2]
         fit_rightx = right_fit[0]*fity**2 + right_fit[1]*fity + right_fit[2]
 
-        # 1. Create an image to draw on and an image to show the selection window
+        # Create an image to draw on and an image to show the selection window
         out_img = np.dstack((binary_warped, binary_warped, binary_warped))*255
         window_img = np.zeros_like(out_img)
 
-        # 2. Color in left and right line pixels
+        # Color in left and right line pixels
         out_img[nonzeroy[l_lane_inds], nonzerox[l_lane_inds]] = [255, 0, 0]
         out_img[nonzeroy[r_lane_inds], nonzerox[r_lane_inds]] = [0, 0, 255]
 
-        # 3. Generate a polygon to illustrate the search window area
+        # Generate a polygon to illustrate the search window area
         # And recast the x and y points into usable format for cv2.fillPoly()
-        left_line_window1 = np.array(
-            [np.transpose(np.vstack([fit_leftx-margin, fity]))])
+        # left_line_window1 = np.array(
+        #     [np.transpose(np.vstack([fit_leftx-margin, fity]))])
 
-        left_line_window2 = np.array(
-            [np.flipud(np.transpose(np.vstack([fit_leftx+margin, fity])))])
+        # left_line_window2 = np.array(
+        #     [np.flipud(np.transpose(np.vstack([fit_leftx+margin, fity])))])
 
-        left_line_pts = np.hstack((left_line_window1, left_line_window2))
+        # left_line_pts = np.hstack((left_line_window1, left_line_window2))
 
-        right_line_window1 = np.array(
-            [np.transpose(np.vstack([fit_rightx-margin, fity]))])
+        # right_line_window1 = np.array(
+        #     [np.transpose(np.vstack([fit_rightx-margin, fity]))])
 
-        right_line_window2 = np.array(
-            [np.flipud(np.transpose(np.vstack([fit_rightx+margin, fity])))])
+        # right_line_window2 = np.array(
+        #     [np.flipud(np.transpose(np.vstack([fit_rightx+margin, fity])))])
 
-        right_line_pts = np.hstack((right_line_window1, right_line_window2))
+        # right_line_pts = np.hstack((right_line_window1, right_line_window2))
 
         return out_img, left_fit, right_fit, fity, fit_leftx, fit_rightx
 
@@ -371,7 +358,7 @@ class LanesProcessing():
          right_fit,
          fity,
          fit_leftx,
-         fit_rightx) = self._detect_left_right_lanes(img, binary_warped)
+         fit_rightx) = self._detect_left_right_lanes(binary_warped)
 
         # Calculate the pixel curve radius
         y_eval = np.max(fity)
