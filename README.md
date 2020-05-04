@@ -242,10 +242,10 @@ histogram, bottom_half = _lr_peaks_histogram(bird_view)
 
 ![](results/06_histogram.png)
 
-<!-- Using sliding windows -->
-
 ## Calculate the radious of curvature
 
+To calculate the radious of curvature, we use the sliding window algorith, to identify pixel that are part of the lane lines (The function is large, so you can found in [Pipeline](Pipeline.ipynb) file).
+![](results/07_slidding_window.png)
 
 
 ## Final pipeline ##
