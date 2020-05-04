@@ -323,7 +323,7 @@ def search_around_poly(binary_warped):
 
 
 ## Final pipeline ##
-The final pipeline is created in [`final_implementation.py`](./final_implementation.py) file. There, each step was wrapped and improved in a function inside a class named LanesProcessing, encapsulating and improving the implementations made before. Each step was assigned in a function in the mentioned class, and tested with the [`final_implementation.ipynb`](./final_implementation.ipynb) notebook. The final result, using a frame of the project video is:
+The final pipeline is created in [`final_implementation.py`](./final_implementation.py) file. There, each step was wrapped and improved in a function inside a class named `LanesProcessing`, encapsulating and improving the implementations made before. Each step was assigned in a function in the mentioned class, and tested with the [`final_implementation.ipynb`](./final_implementation.ipynb) notebook. The final result, using a frame of the project video is:
 
 ![](results/final_result_comparative.png)
 
@@ -348,5 +348,13 @@ def main():
 
 The video result can be found as `output_vid.mp4` in [`videos/`](videos/) folder.
 
+## Discussion ##
 
+### Challenges ###
+This was the most challenged project made by myself, due to the details take in conunt to combine each function in a way to be reusable in a future project. The final implementation was changed many times, due to think in a way to wrap the variables and functions in a class, and get a testeable functions not was easy, but the final result is better that the original one. The combination of colors channels in the binary is very important to find a way to use a more generalized way to extract the lines, and it requires time to analyze and consider external references and articles that was not considered in this project.
 
+### Potential improvements ###
+This pipeline is adjusted only for the project_video.mp4 file, because I was not able to find a robust way to get the thresh in the binary transformations in a dynamic way. Many of the parameters used in the code are static, but with the final implementation made with the `LaneProcessing` class is possible to implement a way to get better thresholds based on the processing made in previous frames. This projec was thinking to be used in a real project, so this is a good start point that requires improvements and aditional considerations. Cases as closes curvatures was not easy to solve, and require aditional steps in the pipeline.
+
+### Conclusion ###
+This project was the best way to get an introduction with the all theorical bases used in computer vision, in the self driving car context. This project provides good bases to use the elemental tranformations required to make a processing pipeline to extract information in the image, and the aditional math strategies that help to get more effective results. The use of statistical analysis could be helpfull in a future implementation over a real scenario.
