@@ -19,9 +19,11 @@ class LanesProcessing():
         self.m_bird_view = np.empty(1)
         self.m_inv_bird_view = np.empty(1)
 
-        self.img = None
-
         self._calibration(img_location)
+
+        # Define conversions in x and y from pixels space to meters
+        self.ym_per_pix = 30/720  # meters per pixel in y dimension
+        self.xm_per_pix = 3.7/700  # meters per pixel in x dimension
 
     # calibration
     def _calibration(self, img_location):
@@ -216,28 +218,28 @@ class LanesProcessing():
             win_xleft_high = leftx_current + margin
             win_xright_low = rightx_current - margin
             win_xright_high = rightx_current + margin
-            
+
             # Draw the windows on the visualization image
             if draw_windows:
-                cv2.rectangle(out_img,(win_xleft_low,win_y_low),
-                (win_xleft_high,win_y_high),(0,255,0), 4) 
-                cv2.rectangle(out_img,(win_xright_low,win_y_low),
-                (win_xright_high,win_y_high),(0,255,0), 4)
-            
+                cv2.rectangle(out_img, (win_xleft_low, win_y_low),
+                              (win_xleft_high, win_y_high), (0, 255, 0), 4)
+                cv2.rectangle(out_img, (win_xright_low, win_y_low),
+                              (win_xright_high, win_y_high), (0, 255, 0), 4)
+
             # Identify the nonzero pixels in x and y within the window #
-            good_left_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & 
-            (nonzerox >= win_xleft_low) &  (nonzerox < win_xleft_high)).nonzero()[0]
-            good_right_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & 
-            (nonzerox >= win_xright_low) &  (nonzerox < win_xright_high)).nonzero()[0]
-            
+            good_left_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) &
+                              (nonzerox >= win_xleft_low) & (nonzerox < win_xleft_high)).nonzero()[0]
+            good_right_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) &
+                               (nonzerox >= win_xright_low) & (nonzerox < win_xright_high)).nonzero()[0]
+
             # Append these indices to the lists
             left_lane_inds.append(good_left_inds)
             right_lane_inds.append(good_right_inds)
-            
+
             # If you found > minpix pixels, recenter next window on their mean position
             if len(good_left_inds) > minpix:
                 leftx_current = np.int(np.mean(nonzerox[good_left_inds]))
-            if len(good_right_inds) > minpix:        
+            if len(good_right_inds) > minpix:
                 rightx_current = np.int(np.mean(nonzerox[good_right_inds]))
 
         # Concatenate the arrays of indices (previously was a list of lists of pixels)
@@ -257,7 +259,7 @@ class LanesProcessing():
         if update_fit:
             self.left_line.fit_line(leftx, lefty, True)
             self.right_line.fit_line(rightx, righty, True)
-        
+
         if draw_windows:
             out_img[lefty, leftx] = [255, 0, 0]
             out_img[righty, rightx] = [0, 0, 255]
@@ -328,25 +330,22 @@ class LanesProcessing():
         out_img[nonzeroy[l_lane_inds], nonzerox[l_lane_inds]] = [255, 0, 0]
         out_img[nonzeroy[r_lane_inds], nonzerox[r_lane_inds]] = [0, 0, 255]
 
-        # Generate a polygon to illustrate the search window area
-        # And recast the x and y points into usable format for cv2.fillPoly()
-        # left_line_window1 = np.array(
-        #     [np.transpose(np.vstack([fit_leftx-margin, fity]))])
-
-        # left_line_window2 = np.array(
-        #     [np.flipud(np.transpose(np.vstack([fit_leftx+margin, fity])))])
-
-        # left_line_pts = np.hstack((left_line_window1, left_line_window2))
-
-        # right_line_window1 = np.array(
-        #     [np.transpose(np.vstack([fit_rightx-margin, fity]))])
-
-        # right_line_window2 = np.array(
-        #     [np.flipud(np.transpose(np.vstack([fit_rightx+margin, fity])))])
-
-        # right_line_pts = np.hstack((right_line_window1, right_line_window2))
-
         return out_img, left_fit, right_fit, fity, fit_leftx, fit_rightx
+
+    # Calculates the radius of curvature
+    def _measure_curvature(self, fity, left_fit_cr, right_fit_cr):
+        ym_per_pix = self.ym_per_pix  # meters per pixel in y dimension
+        xm_per_pix = self.xm_per_pix  # meters per pixel in x dimension
+
+        y_eval = np.max(fity)
+
+        left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix +
+                               left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
+        right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix +
+                                right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
+
+        avg_rad = round(np.mean([left_curverad, right_curverad]), 0)
+        return avg_rad
 
     # process image function that returns information about finding lanes
     def process_image(self, img):
@@ -360,40 +359,26 @@ class LanesProcessing():
          fit_leftx,
          fit_rightx) = self._detect_left_right_lanes(binary_warped)
 
-        # Calculate the pixel curve radius
-        y_eval = np.max(fity)
-        left_curverad = (
-            (1 + (2*left_fit[0]*y_eval + left_fit[1])**2)**1.5) / np.absolute(2*left_fit[0])
-        right_curverad = (
-            (1 + (2*right_fit[0]*y_eval + right_fit[1])**2)**1.5) / np.absolute(2*right_fit[0])
-
-        # Define conversions in x and y from pixels space to meters
-        ym_per_pix = 30/720  # meters per pixel in y dimension
-        xm_per_pix = 3.7/700  # meters per pixel in x dimension
-
         # Fit new polynomials to x,y in world space
-        left_fit_cr = np.polyfit(self.left_line.all_y*ym_per_pix,
-                                 self.left_line.all_x*xm_per_pix, 2)
-        right_fit_cr = np.polyfit(self.right_line.all_y*ym_per_pix,
-                                  self.right_line.all_x*xm_per_pix, 2)
+        left_fit_cr = np.polyfit(self.left_line.all_y*self.ym_per_pix,
+                                 self.left_line.all_x*self.xm_per_pix, 2)
+        right_fit_cr = np.polyfit(self.right_line.all_y*self.ym_per_pix,
+                                  self.right_line.all_x*self.xm_per_pix, 2)
 
-        # Calculate the new radius of curvature
-        left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix +
-                               left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
-        right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix +
-                                right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
-        avg_rad = round(np.mean([left_curverad, right_curverad]), 0)
+        # Calculate the pixel curve radius
+        avg_rad = self._measure_curvature(fity, left_fit_cr, right_fit_cr)
+
         rad_text = 'Radius of Curvature = {}(m)'.format(avg_rad)
 
         # Calculating middle of the image, aka where the car camera is
         middle_of_image = img.shape[1] / 2
-        car_position = middle_of_image * xm_per_pix
+        car_position = middle_of_image * self.xm_per_pix
 
         # Calculating middle of the lane
         left_line_base = self._second_ord_poly(
-            left_fit_cr, img.shape[0] * ym_per_pix)
+            left_fit_cr, img.shape[0] * self.ym_per_pix)
         right_line_base = self._second_ord_poly(
-            right_fit_cr, img.shape[0] * ym_per_pix)
+            right_fit_cr, img.shape[0] * self.ym_per_pix)
         lane_mid = (left_line_base+right_line_base)/2
 
         # Calculate distance from center and list differently based on left or right

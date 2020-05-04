@@ -77,38 +77,17 @@ Lets print all the rgb channels for a image taken in the lane lines context.
 The following image will be used to identify the color transforms:
 ![](straight_lines1.jpg)
 
-The RGB channels printed as gray scale looks like this:
+The RGB channels printed as gray scale each one looks like this:
 
-- Red channel:
-![](results/03_lane_lines_red.jpg)
-
-- Green channel:
-![](results/03_lane_lines_green.jpg)
-
-- Blue channel:
-![](results/03_lane_lines_blue.jpg)
-
-Lets move to another color space.
+![](results/bgr.png)
 
 In the HLS space, each channel printed as gray scale looks like this:
-- H channel:
-![](results/03_lane_lines_h_hls.jpg)
 
-- L channel:
-![](results/03_lane_lines_l_hls.jpg)
-
-- S channel:
-![](results/03_lane_lines_s_hls.jpg)
+![](results/hls.png)
 
 In the HSV space, each channel printed as gray scale looks like this:
-- H channel:
-![](results/03_lane_lines_h_hsv.jpg)
 
-- S channel:
-![](results/03_lane_lines_s_hsv.jpg)
-
-- V channel:
-![](results/03_lane_lines_v_hsv.jpg)
+![](results/hsv.png)
 
 Based in the results, the S channel from HLS should be a good option, because it have a high contrast with the lines and background.
 
