@@ -75,7 +75,7 @@ We obtain the following result:
 Lets print all the rgb channels for a image taken in the lane lines context.
 
 The following image will be used to identify the color transforms:
-![](straight_lines1.jpg)
+![](test_images/straight_lines1.jpg)
 
 The RGB channels printed as gray scale each one looks like this:
 
@@ -247,10 +247,106 @@ histogram, bottom_half = _lr_peaks_histogram(bird_view)
 To calculate the radious of curvature, we use the sliding window algorith, to identify pixel that are part of the lane lines (The function is large, so you can found in [Pipeline](Pipeline.ipynb) file).
 ![](results/07_slidding_window.png)
 
+The following image is a combination of differents funcions that use the calculated points in the sliding window with the previous polinomial fit values.
+![](results/08_around_poly.png)
+
+The functions called are:
+```python
+def fit_poly(img_shape, leftx, lefty, rightx, righty):
+    left_fit = np.polyfit(lefty, leftx, 2)
+    right_fit = np.polyfit(righty, rightx, 2)
+    # Generate x and y values for plotting
+    ploty = np.linspace(0, img_shape[0]-1, img_shape[0])
+    ### Calc both polynomials using ploty, left_fit and right_fit ###
+    left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
+    right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
+    
+    return left_fitx, right_fitx, ploty
+
+def search_around_poly(binary_warped):
+    margin = 100
+
+    # Grab activated pixels
+    nonzero = binary_warped.nonzero()
+    nonzeroy = np.array(nonzero[0])
+    nonzerox = np.array(nonzero[1])
+    
+    # Using the +/- margin of our polynomial function #
+    l_lane_inds = ((nonzerox > (left_fit[0]*(nonzeroy**2) + left_fit[1]*nonzeroy + 
+                    left_fit[2] - margin)) & (nonzerox < (left_fit[0]*(nonzeroy**2) + 
+                    left_fit[1]*nonzeroy + left_fit[2] + margin)))
+    r_lane_inds = ((nonzerox > (right_fit[0]*(nonzeroy**2) + right_fit[1]*nonzeroy + 
+                    right_fit[2] - margin)) & (nonzerox < (right_fit[0]*(nonzeroy**2) + 
+                    right_fit[1]*nonzeroy + right_fit[2] + margin)))
+    
+    # Extract left and right line pixel positions
+    leftx = nonzerox[l_lane_inds]
+    lefty = nonzeroy[l_lane_inds] 
+    rightx = nonzerox[r_lane_inds]
+    righty = nonzeroy[r_lane_inds]
+
+    # Fit new polynomials
+    left_fitx, right_fitx, ploty = fit_poly(binary_warped.shape, leftx, lefty, rightx, righty)
+    
+    # Create an image to draw on and an image to show the selection window
+    out_img = np.dstack((binary_warped, binary_warped, binary_warped))*255
+    window_img = np.zeros_like(out_img)
+    # Color in left and right line pixels
+    out_img[nonzeroy[l_lane_inds], nonzerox[l_lane_inds]] = [255, 0, 0]
+    out_img[nonzeroy[r_lane_inds], nonzerox[r_lane_inds]] = [0, 0, 255]
+    
+    # Generate a polygon to illustrate the search window area
+    # And recast the x and y points into usable format for cv2.fillPoly()
+    left_line_window1 = np.array([np.transpose(np.vstack([left_fitx-margin, ploty]))])
+    
+    left_line_window2 = np.array([np.flipud(np.transpose(np.vstack([left_fitx+margin, ploty])))])
+    
+    left_line_pts = np.hstack((left_line_window1, left_line_window2))
+    
+    right_line_window1 = np.array([np.transpose(np.vstack([right_fitx-margin, ploty]))])
+    
+    right_line_window2 = np.array([np.flipud(np.transpose(np.vstack([right_fitx+margin, ploty])))])
+    
+    right_line_pts = np.hstack((right_line_window1, right_line_window2))
+
+    # Draw the lane onto the warped blank image
+    cv2.fillPoly(window_img, np.int_([left_line_pts]), (0,255, 0))
+    cv2.fillPoly(window_img, np.int_([right_line_pts]), (0,255, 0))
+    result = cv2.addWeighted(out_img, 1, window_img, 0.3, 0)
+    
+    # Plot the polynomial lines onto the image
+    plt.plot(left_fitx, ploty, color='yellow')
+    plt.plot(right_fitx, ploty, color='yellow')
+    
+    return result
+```
+
 
 ## Final pipeline ##
-The final pipeline is created in [`final_implementation.py`](./final_implementation.py) file. There, each step was wrapped in a function inside a class named LanesProcessing and tested with the [`final_implementation.ipynb`](./final_implementation.ipynb) notebook.
+The final pipeline is created in [`final_implementation.py`](./final_implementation.py) file. There, each step was wrapped and improved in a function inside a class named LanesProcessing, encapsulating and improving the implementations made before. Each step was assigned in a function in the mentioned class, and tested with the [`final_implementation.ipynb`](./final_implementation.ipynb) notebook. The final result, using a frame of the project video is:
 
-## How to write a README
-A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
+![](results/final_result_comparative.png)
+
+The implementation in the video can be found in [`final_implementation.py`](./final_implementation.py) in the `main` function:
+
+```python
+def main():
+    # Lane processing object
+    processing = LanesProcessing('camera_cal/calibration*.jpg')
+
+    # Path to the clip input
+    video_input = './videos/project_video.mp4'
+    # Path to the clip output
+    video_output = './videos/output_vid.mp4'
+
+    clip1 = VideoFileClip(video_input)
+
+    # This operation expects 3-channel images
+    vid_clip = clip1.fl_image(lambda frame: processing.process_image(frame))
+    vid_clip.write_videofile(video_output, audio=False)
+```
+
+The video result can be found as `output_vid.mp4` in [`videos/`](videos/) folder.
+
+
 
